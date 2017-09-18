@@ -25,6 +25,10 @@ type NozzleConfig struct {
 	DeploymentFilter       string
 	DisableAccessControl   bool
 	IdleTimeoutSeconds     uint32
+	//CFUser				   string
+	//CFPassword			   string
+	CFApiEndpoint		   string
+	CFSkipSslValidation	   bool
 }
 
 func Parse(configPath string) (*NozzleConfig, error) {
@@ -57,6 +61,11 @@ func Parse(configPath string) (*NozzleConfig, error) {
 	overrideWithEnvBool("NOZZLE_INSECURESSLSKIPVERIFY", &config.InsecureSSLSkipVerify)
 	overrideWithEnvBool("NOZZLE_DISABLEACCESSCONTROL", &config.DisableAccessControl)
 	overrideWithEnvUint32("NOZZLE_IDLETIMEOUTSECONDS", &config.IdleTimeoutSeconds)
+
+	//overrideWithEnvVar("CF_USER", &config.CFUser)
+	//overrideWithEnvVar("CF_PASSWORD", &config.CFPassword)
+	overrideWithEnvVar("CF_API_ENDPOINT", &config.CFApiEndpoint)
+	overrideWithEnvBool("CF_SKIP_SSL_VALIDATION", &config.CFSkipSslValidation)
 
 	if config.MetricPrefix == "" {
 		config.MetricPrefix = "cloudfoundry.nozzle."

@@ -14,6 +14,7 @@ import (
 
 	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/sonde-go/events"
+	"github.com/DataDog/datadog-firehose-nozzle/util"
 )
 
 const DefaultAPIURL = "https://app.datadoghq.com/api/v1"
@@ -32,12 +33,14 @@ type Client struct {
 	maxPostBytes          uint32
 	log                   *gosteno.Logger
 	formatter             Formatter
+	appDataLookup		  *util.AppDataLookup
 }
 
 type MetricKey struct {
 	EventType events.Envelope_EventType
 	Name      string
 	TagsHash  string
+	AppId	  *events.UUID
 }
 
 type MetricValue struct {
@@ -71,6 +74,7 @@ func New(
 	ip string,
 	writeTimeout time.Duration,
 	maxPostBytes uint32,
+	lookup *util.AppDataLookup,
 	log *gosteno.Logger,
 ) *Client {
 	ourTags := []string{
@@ -94,6 +98,7 @@ func New(
 		httpClient:   httpClient,
 		maxPostBytes: maxPostBytes,
 		formatter:    Formatter{},
+		appDataLookup: lookup,
 	}
 }
 
@@ -103,7 +108,9 @@ func (c *Client) AlertSlowConsumerError() {
 
 func (c *Client) AddMetric(envelope *events.Envelope) {
 	c.totalMessagesReceived++
-	if envelope.GetEventType() != events.Envelope_ValueMetric && envelope.GetEventType() != events.Envelope_CounterEvent {
+
+	//only want httpstartstops
+	if envelope.GetEventType() != events.Envelope_HttpStartStop {
 		return
 	}
 
@@ -114,10 +121,12 @@ func (c *Client) AddMetric(envelope *events.Envelope) {
 		EventType: envelope.GetEventType(),
 		Name:      getName(envelope),
 		TagsHash:  hashTags(tags),
+		AppId:     envelope.HttpStartStop.GetApplicationId(),
 	}
 
 	mVal := c.metricPoints[key]
-	value := getValue(envelope)
+	c.appDataLookup.Incr(util.Stringify(envelope.HttpStartStop.GetApplicationId()))
+	value := getValue(c, envelope)
 
 	mVal.Host = host
 	mVal.Tags = tags
@@ -135,7 +144,7 @@ func (c *Client) PostMetrics() error {
 	c.log.Infof("Posting %d metrics", numMetrics)
 
 	c.totalMetricsSent += uint64(len(c.metricPoints))
-	seriesBytes := c.formatter.Format(c.prefix, c.maxPostBytes, c.metricPoints)
+	seriesBytes := c.formatter.Format(c.appDataLookup, c.prefix, c.maxPostBytes, c.metricPoints)
 	c.metricPoints = make(map[MetricKey]MetricValue)
 
 	for _, data := range seriesBytes {
@@ -220,21 +229,25 @@ func (c *Client) addInternalMetric(name string, value uint64) {
 
 func getName(envelope *events.Envelope) string {
 	switch envelope.GetEventType() {
-	case events.Envelope_ValueMetric:
-		return envelope.GetOrigin() + "." + envelope.GetValueMetric().GetName()
-	case events.Envelope_CounterEvent:
-		return envelope.GetOrigin() + "." + envelope.GetCounterEvent().GetName()
+	//case events.Envelope_ValueMetric:
+	//	return envelope.GetOrigin() + "." + envelope.GetValueMetric().GetName()
+	//case events.Envelope_CounterEvent:
+	//	return envelope.GetOrigin() + "." + envelope.GetCounterEvent().GetName()
+	case events.Envelope_HttpStartStop:
+		return envelope.GetOrigin() + "." + "RequestCountsByApp"
 	default:
 		panic("Unknown event type")
 	}
 }
 
-func getValue(envelope *events.Envelope) float64 {
+func getValue(c *Client, envelope *events.Envelope) float64 {
 	switch envelope.GetEventType() {
-	case events.Envelope_ValueMetric:
-		return envelope.GetValueMetric().GetValue()
-	case events.Envelope_CounterEvent:
-		return float64(envelope.GetCounterEvent().GetTotal())
+	//case events.Envelope_ValueMetric:
+	//	return envelope.GetValueMetric().GetValue()
+	//case events.Envelope_CounterEvent:
+	//	return float64(envelope.GetCounterEvent().GetTotal())
+	case events.Envelope_HttpStartStop:
+		return float64(c.appDataLookup.GetValue(util.Stringify(envelope.HttpStartStop.GetApplicationId())))
 	default:
 		panic("Unknown event type")
 	}
@@ -247,6 +260,7 @@ func parseTags(envelope *events.Envelope) []string {
 	tags = appendTagIfNotEmpty(tags, "ip", envelope.GetIp())
 	tags = appendTagIfNotEmpty(tags, "origin", envelope.GetOrigin())
 	tags = appendTagIfNotEmpty(tags, "name", envelope.GetOrigin())
+	tags = appendTagIfNotEmpty(tags, "appId", util.Stringify(envelope.GetHttpStartStop().GetApplicationId()))
 	for tname, tvalue := range envelope.GetTags() {
 		tags = appendTagIfNotEmpty(tags, tname, tvalue)
 	}

@@ -1,5 +1,6 @@
 package: github.com/DataDog/datadog-firehose-nozzle
 import:
+- package: github.com/cloudfoundry-community/go-cfclient
 - package: code.cloudfoundry.org/localip
 - package: github.com/cloudfoundry-incubator/uaago
 - package: github.com/cloudfoundry/gosteno

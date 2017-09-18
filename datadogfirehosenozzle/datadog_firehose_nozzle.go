@@ -12,6 +12,7 @@ import (
 	noaaerrors "github.com/cloudfoundry/noaa/errors"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/gorilla/websocket"
+	"github.com/DataDog/datadog-firehose-nozzle/util"
 )
 
 type DatadogFirehoseNozzle struct {
@@ -65,6 +66,7 @@ func (d *DatadogFirehoseNozzle) createClient() {
 		ipAddress,
 		time.Duration(d.config.DataDogTimeoutSeconds)*time.Second,
 		d.config.FlushMaxBytes,
+		d.createAppLookup(),
 		d.log,
 	)
 }
@@ -141,4 +143,8 @@ func (d *DatadogFirehoseNozzle) handleMessage(envelope *events.Envelope) {
 		d.log.Infof("We've intercepted an upstream message which indicates that the nozzle or the TrafficController is not keeping up. Please try scaling up the nozzle.")
 		d.client.AlertSlowConsumerError()
 	}
+}
+
+func (d *DatadogFirehoseNozzle) createAppLookup() *util.AppDataLookup {
+	return util.NewAppDataLookup(d.config.CFApiEndpoint, d.config.Client, d.config.ClientSecret, d.config.CFSkipSslValidation, d.log)
 }
