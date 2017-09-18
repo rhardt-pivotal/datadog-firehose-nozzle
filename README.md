@@ -16,7 +16,7 @@ properties:
         override: true
         secret: <password>
         scope: openid,oauth.approvals,doppler.firehose
-        authorities: oauth.login,doppler.firehose
+        authorities: oauth.login,doppler.firehose,cloud-controller.admin
 ```
 
 ### Dependencies

@@ -1,0 +1,21 @@
+applications:
+- name: http-ss-to-datadog
+no-route: true
+health-check-type: process
+env:
+  NOZZLE_UAAURL: https://uaa.bosh-lite.com
+  NOZZLE_CLIENT: datadog-firehose-nozzle
+  NOZZLE_CLIENT_SECRET: datadog
+  NOZZLE_TRAFFICCONTROLLERURL: wss://doppler.bosh-lite.com:443
+  NOZZLE_FIREHOSESUBSCRIPTIONID: http-ss-nozzle-to-datadog
+  NOZZLE_DATADOGURL: https://app.datadoghq.com/api/v1/series
+  NOZZLE_DATADOGAPIKEY: 8675309JENNY
+  NOZZLE_DATADOGTIMEOUTSECONDS: 5
+  NOZZLE_METRICPREFIX: http-ss-by-app.
+  NOZZLE_DEPLOYMENT: http-ss-to-datatog
+  NOZZLE_FLUSHMAXBYTES: 1000000
+  NOZZLE_INSECURESSLSKIPVERIFY: true
+  NOZZLE_DISABLEACCESSCONTROL: false
+  NOZZLE_IDLETIMEOUTSECONDS: 60
+  CF_API_ENDPOINT: https://api.bosh-lite.com
+  CF_SKIP_SSL_VALIDATION: true
