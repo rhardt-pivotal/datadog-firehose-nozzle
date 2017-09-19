@@ -6,6 +6,7 @@ import (
 
 	"fmt"
 	"sync/atomic"
+	"net/url"
 )
 
 var Durations = []int{1,60,300,3600,86400}
@@ -71,7 +72,9 @@ func NewAppDataLookup(
 	}
 
 	log.Info("Fetching apps")
-	allApps, err := cfc.ListApps()
+	q := url.Values{}
+	q.Set("inline-relations-depth", "0")
+	allApps, err := cfc.ListAppsByQuery(q)
 	log.Info(fmt.Sprintf("retrieved %d apps", len(allApps)))
 
 	if (err != nil) {
@@ -79,8 +82,8 @@ func NewAppDataLookup(
 	}
 
 	log.Info("Fetching orgs")
-	allOrgs, err := cfc.ListOrgs()
-	log.Info(fmt.Sprintf("retrieved %d orgs", len(allApps)))
+	allOrgs, err := cfc.ListOrgsByQuery(q)
+	log.Info(fmt.Sprintf("retrieved %d orgs", len(allOrgs)))
 
 	if (err != nil) {
 		panic(err.Error())
@@ -92,13 +95,29 @@ func NewAppDataLookup(
 		orgNames[org.Guid] = org.Name
 	}
 
+	log.Info("Fetching spaces")
+	allSpaces, err := cfc.ListSpacesByQuery(q)
+	log.Info(fmt.Sprintf("retrieved %d spaces", len(allSpaces)))
+
+	if (err != nil) {
+		panic(err.Error())
+	}
+
+	spaceNames := make(map[string]string)
+	spaceOrgs := make(map[string]string)
+
+	for _, space := range allSpaces {
+		spaceNames[space.Guid] = space.Name
+		spaceOrgs[space.Guid] = space.OrganizationGuid
+	}
+
 
 	log.Info("Building internal map")
 	appMetaDataMap := make(map[string]*AppMetadata)
 	for _, app := range allApps {
 		amd := &AppMetadata{
-			OrgName: orgNames[app.SpaceData.Entity.OrganizationGuid],
-			SpaceName: app.SpaceData.Entity.Name,
+			OrgName: orgNames[spaceOrgs[app.SpaceGuid]],
+			SpaceName: spaceNames[app.SpaceGuid],
 			AppName: app.Name,
 		}
 		appMetaDataMap[app.Guid] = amd
@@ -115,25 +134,9 @@ func NewAppDataLookup(
 }
 
 
-
-//func (c *RequestRegistry) RegisterMessage(envelope *events.Envelope) {
-//	appId := util.Stringify(envelope.HttpStartStop.ApplicationId)
-//	//c.log.Info("ENRICH MESSAGE: "+appId+"-----"+envelope.String())
-//	if (appId != not_an_app) {
-//		appStr := c.appMap[appId]
-//		if appStr != "" {
-//			if c.ratecountersmap[appStr] == nil {
-//				c.ratecountersmap[appStr] = util.NewRateCounters(Durations)
-//			}
-//			c.ratecountersmap[appStr].Incr()
-//		}
-//		c.appsThisCycle[appId] = true
-//	}
-//}
-
-
 func (c *AppDataLookup) LookupAppMetadata(appId string) *AppMetadata {
 	if c.appMetadataMap[appId] == nil {
+		c.log.Info("*** Unknown App Id - updating")
 		c.updateMetadata(appId)
 	}
 	return c.appMetadataMap[appId]
@@ -149,6 +152,7 @@ func (c *AppDataLookup) GetValue(appId string) int64 {
 
 func (c *AppDataLookup) updateMetadata(appId string) {
 	app, err := c.cfClient.GetAppByGuid(appId)
+	c.log.Info("Got App, guid: "+ appId + ", data: " + app.Name)
 	updated := &AppMetadata{}
 	if err != nil {
 		updated = unknown
